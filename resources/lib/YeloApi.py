@@ -1,25 +1,28 @@
 # -*- coding: utf-8 -*-
+# GNU General Public License v3.0 (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
+from __future__ import absolute_import, division, unicode_literals
 import requests
-import sys
 
-from resources.lib.helpers.helperclasses import *
-from resources.lib.helpers.helpermethods import *
-from resources.lib.Exceptions import Exceptions
-from resources.lib.YeloErrors import YeloErrors
-from resources.lib.kodiwrapper import KodiWrapper
+from helpers.helperclasses import Credentials, UA
+from helpers.helpermethods import (authorization_payload, cache_to_file, create_token, device_payload, get_from_cache, is_in_cache,
+                                   login_payload, oauth_payload, oauth_refresh_token_payload, regex, stream_payload, timestamp_to_datetime)
+from Exceptions import Exceptions
+from YeloErrors import YeloErrors
+from kodiwrapper import KodiWrapper
 
-if sys.version_info[0] == 3:
+try:  # Python 3
     from urllib.parse import quote
-else:
-    from urllib import quote
+except ImportError:  # Python 2
+    from urllib2 import quote
+    # FIXME: Handle this as a separate case
     from builtins import xrange as range
 
 BASE_URL = "https://api.yeloplay.be/api/v1"
 CALLBACK_URL = "https://www.yeloplay.be/openid/callback"
 
 session = requests.Session()
-#session.verify = False
+# session.verify = False
 session.headers['User-Agent'] = UA.UA()
 
 
@@ -163,15 +166,17 @@ class YeloApi(object):
             except Exceptions.NotAuthorizedException:
                 self._refresh_oauth_token()
 
-        if resp:
-            j = resp.json()
+        if not resp:
+            return None
 
-            if not j.get("errors"):
-                return resp.json()
+        response_data = resp.json()
 
-            title, message = YeloErrors.get_error_message(session, j["errors"][0]["code"])
+        if response_data.get("errors"):
+            title, message = YeloErrors.get_error_message(session, response_data["errors"][0]["code"])
             KodiWrapper.dialog_ok(title, message)
             raise Exceptions.YeloException(message)
+
+        return response_data
 
     def get_manifest(self, channel):
         res = self._start_stream(channel)
@@ -234,8 +239,7 @@ class YeloApi(object):
                 name=name,
                 id=id,
                 logo=logo,
-                stream='plugin://plugin.video.yelo/play/id/{uniqueName}'.
-                    format(uniqueName=uniqueName)))
+                stream='plugin://plugin.video.yelo/play/id/{uniqueName}'.format(uniqueName=uniqueName)))
 
         return channels
 
@@ -247,21 +251,16 @@ class YeloApi(object):
         channel_id = data["schedule"][0]["channelid"]
 
         for broadcast in data["schedule"][0]["broadcast"]:
-            try:
-                channels.append(
-                    {
-                        "id": channel_id,
-                        "start": timestamp_to_datetime(broadcast["starttime"]),
-                        "stop": timestamp_to_datetime(broadcast["endtime"]),
-                        "title": (broadcast["title"] or "").strip().replace("&", "en"),
-                        "description": (broadcast["shortdescription"] or "").strip().replace("&", "en"),
-                        "subtitle": broadcast["contentlabel"] or "",
-                        "image": broadcast["image"]
-                    })
-
-                dict_ref.update({channel_name: channels})
-            except:
-                continue
+            channels.append(dict(
+                id=channel_id,
+                start=timestamp_to_datetime(broadcast.get('starttime')),
+                stop=timestamp_to_datetime(broadcast.get('endtime')),
+                title=broadcast.get('title', '').strip().replace("&", "en"),
+                description=broadcast.get('shortdescription', '').strip().replace("&", "en"),
+                subtitle=broadcast.get('contentlabel', ''),
+                image=broadcast.get('image'),
+            ))
+            dict_ref.update({channel_name: channels})
 
     def _epg(self):
         from threading import Thread

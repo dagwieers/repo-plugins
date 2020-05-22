@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
+# GNU General Public License v3.0 (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
+from __future__ import absolute_import, division, unicode_literals
+import json
+import logging
 import xbmc
 import xbmcaddon
 import xbmcgui
-import sys
-import logging
-import json as json
-
 
 # read settings
 ADDON = xbmcaddon.Addon()
